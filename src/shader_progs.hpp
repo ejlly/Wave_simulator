@@ -6,11 +6,10 @@
 
 class Program{
 	protected:
+		GLuint programID;
 		GLuint loadShader(char const *shader_file_path, GLenum shaderType);
 
 	public:
-
-		GLuint programID;
 
 		void use();
 		~Program();

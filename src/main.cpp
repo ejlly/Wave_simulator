@@ -5,6 +5,7 @@
 #include <sstream>
 #include <vector>
 #include <string.h>
+#include <unistd.h>
 
 #define GLEW_STATIC
 #include <GL/glew.h>
@@ -18,7 +19,7 @@
 #include "shader_progs.hpp"
 
 #define ACTUAL_HEIGHT 600
-#define ACTUAL_WIDTH 300
+#define ACTUAL_WIDTH 600
 
 #define HEIGHT (ACTUAL_HEIGHT + 2)
 #define WIDTH (ACTUAL_WIDTH + 2)
@@ -29,7 +30,7 @@
 #define EPS 0.00001
 #define PI 3.1415926535897932384626
 
-#define IMPULSE (-1)
+#define IMPULSE (1)
 
 using namespace std;
 
@@ -130,17 +131,47 @@ int main(int argc, char* argv[]){
 	int const groups_x = (WIDTH/grp_size) + 1, groups_y = (HEIGHT/grp_size) + 1;
 
 	ComputeProgram calculate("src/shaders/computeWave.glsl");
+	ComputeProgram copies("src/shaders/copyTabs.glsl");
 
-	calculate.use();
+	GLfloat source[WIDTH][HEIGHT];
+	GLfloat u_0[WIDTH][HEIGHT];
+	GLfloat u_1[WIDTH][HEIGHT];
+	GLfloat u_2[WIDTH][HEIGHT];
+	for(int i(0); i<WIDTH; i++){
+		for(int j(0); j<HEIGHT; j++){
+			source[i][j] = 0;
+			u_0[i][j] = 0;
+			u_1[i][j] = 0;
+			u_2[i][j] = 0;
+		}
+	}
 
-	calculate.uniformui("max_w", (GLuint) WIDTH);
-	calculate.uniformui("max_h", (GLuint) HEIGHT);
 
-	GLuint *waveTextures; //0 is actual, 1 is memory
-	glGenTextures(2, waveTextures);
+	GLuint tabBuffer[4];
+
+	glGenBuffers(4, tabBuffer);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, tabBuffer[0]);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, tabBuffer[0]);
+	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(GLfloat)*WIDTH*HEIGHT, source, GL_DYNAMIC_READ);
+
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, tabBuffer[1]);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, tabBuffer[1]);
+	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(GLfloat)*WIDTH*HEIGHT, u_2, GL_DYNAMIC_READ);
+
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, tabBuffer[2]);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, tabBuffer[2]);
+	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(GLfloat)*WIDTH*HEIGHT, u_1, GL_DYNAMIC_READ);
+
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, tabBuffer[3]);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, tabBuffer[3]);
+	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(GLfloat)*WIDTH*HEIGHT, u_0, GL_DYNAMIC_READ);
+
+	GLuint waveTextures[1]; //0 is actual, 1 is mem intermediate, 2 is mem
+	glGenTextures(1, waveTextures);
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, waveTextures[0]);
+	
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -149,19 +180,15 @@ int main(int argc, char* argv[]){
     glGenerateMipmap(GL_TEXTURE_2D);  
 	glBindImageTexture(0, waveTextures[0], 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
 
-	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, waveTextures[1]);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, WIDTH, HEIGHT, 0, GL_RGBA, GL_FLOAT, nullptr);
-    glGenerateMipmap(GL_TEXTURE_2D);  
-	glBindImageTexture(1, waveTextures[1], 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
+	calculate.use();
+	calculate.uniformui("max_w", (GLuint) WIDTH);
+	calculate.uniformui("max_h", (GLuint) HEIGHT);
 
-	glBindTexture(GL_TEXTURE_2D, 0);
+	copies.use();
+	copies.uniformui("max_w", (GLuint) WIDTH);
+	copies.uniformui("max_h", (GLuint) HEIGHT);
 
-
+	glUseProgram(0);
 	
 	GLfloat vertices[] = {
 		// Positions		Colors			  Texture Coords
@@ -176,9 +203,6 @@ int main(int argc, char* argv[]){
 		1, 2, 3
 	};
 
-
-
-	
 	/*
 	glBindTexture(GL_TEXTURE_2D, waveTexture);
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
@@ -219,12 +243,23 @@ int main(int argc, char* argv[]){
 	while(!glfwWindowShouldClose(win.getaddr())){
 		glfwPollEvents();
 		GLfloat timeValue = glfwGetTime();
+
+		copies.use();
+		copies.compute(groups_x, groups_y, 1);
+		glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 	
 		calculate.use();
-		calculate.uniformf("time", timeValue - timeOrigin);
+		//calculate.uniformf("time", timeValue - timeOrigin);
+		source[WIDTH/2][HEIGHT/2] = IMPULSE * sin(PI*(timeValue - timeOrigin));
+		//source[WIDTH/2 + 1][HEIGHT/2] = -IMPULSE * sin(PI*(timeValue - timeOrigin));
+		//source[WIDTH/2][HEIGHT/2] = IMPULSE;
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, tabBuffer[0]);
+		glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(source), source, GL_DYNAMIC_READ);
+
 		calculate.compute(groups_x, groups_y, 1);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-		
+
 		
 		glClear(GL_COLOR_BUFFER_BIT);
 		plot.use();
@@ -239,6 +274,8 @@ int main(int argc, char* argv[]){
 		glBindVertexArray(0);
 
 		glfwSwapBuffers(win.getaddr());
+
+		//usleep(500);
 	}
 
 
@@ -331,7 +368,8 @@ int main(int argc, char* argv[]){
 	glDeleteBuffers(1, &EBO);
 
 
-	glDeleteTextures(2, waveTextures);
+	glDeleteTextures(1, waveTextures);
+	glDeleteBuffers(4, tabBuffer);
 
 	glfwTerminate();
 	return 0;

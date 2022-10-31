@@ -3,9 +3,25 @@
 layout (local_size_x = 32, local_size_y = 32) in;
 layout (rgba32f, binding = 0) uniform image2D img_output;
 
+layout (std430, binding = 1) coherent buffer SourceBuffer{
+	float source[];
+};
+
+layout (std430, binding = 2) coherent buffer MemBuffer{
+	float u_2[];
+};
+
+layout (std430, binding = 3) coherent buffer MemIntermediateBuffer{
+	float u_1[];
+};
+
+layout (std430, binding = 4) coherent buffer MemCur{
+	float u_0[];
+};
+
 uniform uint max_w;
 uniform uint max_h;
-uniform float time;
+//uniform float time;
 
 #define DT 1 //en ms
 #define CX 0.005//célérité
@@ -14,6 +30,25 @@ uniform float time;
 #define PI 3.1415926535897932384626
 
 #define IMPULSE (-1)
+
+float minimum(float a, float b){if(a<b) return a; return b;}
+//float abs(float a){ if(a>0) return a; return -a;}
+
+float pixTofloat(vec4 pixel){
+	return pixel.x - pixel.y;
+}
+
+vec4 floatToPix(float tmp){
+	if(tmp > EPS){
+		return vec4(minimum(-tmp/IMPULSE, 1.0f), 0.0f, 0.0f, 1.0f);
+	}
+	else if(tmp < EPS && tmp > -EPS){
+		return vec4(0.0f, 0.0f, 0.0f, 1.0f);
+	}
+	else{
+		return vec4(0.0f, minimum(tmp/IMPULSE, 1.0f), 0.0f, 1.0f);	
+	}
+}
 
 void main(){
 	ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
@@ -24,22 +59,32 @@ void main(){
 	}
 
 	vec4 pixel;
+	
+	/*
+	float mem_i_j  = pixTofloat(imageLoad(img_mem, coords));
+	float cur_i_j  = pixTofloat(imageLoad(img_mem_intermediate, coords));
+	float cur_ip_j = pixTofloat(imageLoad(img_mem_intermediate, ivec2(coords.x + 1u, coords.y)));
+	float cur_im_j = pixTofloat(imageLoad(img_mem_intermediate, ivec2(coords.x - 1u, coords.y)));
+	float cur_i_jp = pixTofloat(imageLoad(img_mem_intermediate, ivec2(coords.x, coords.y + 1u)));
+	float cur_i_jm = pixTofloat(imageLoad(img_mem_intermediate, ivec2(coords.x, coords.y - 1u)));
+	*/
 
-	tmp = -u_nm[i][j] + 2*u_n[i][j] + CX*CX * (u_n[i+1][j] - 2 * u_n[i][j] + u_n[i-1][j]) 
-							   + CY*CY * (u_n[i][j+1] - 2 * u_n[i][j] + u_n[i][j-1]);
-	u_nm[i][j] = u_n[i][j];
-	u_n[i][j] = tmp;
+	float mem_i_j  = u_2[coords.x * max_w + coords.y];
+	float cur_i_j  = u_1[coords.x * max_w + coords.y];
+	float cur_ip_j = u_1[(coords.x+1u) * max_w + coords.y];
+	float cur_im_j = u_1[(coords.x-1u) * max_w + coords.y];
+	float cur_i_jp = u_1[coords.x * max_w + (coords.y+1u)];
+	float cur_i_jm = u_1[coords.x * max_w + (coords.y-1u)];
 
-	if(tmp > EPS){
-		pixel = vec4(0.0f, 0.0f, tmp/IMPULSE*.1 , 1.0f);
-	}
-	else if(tmp < EPS && tmp > -EPS){
-		pixel = vec4(0.0f, 0.0f, 0.0f, 1.0f);
-	}
-	else{
-		pixel = vec4(tmp/IMPULSE * 2, 0.0f, 0.0f, 1.0f);	
-	}
+	float tmp = -mem_i_j + 2*cur_i_j + CX*CX * (cur_ip_j - 2 * cur_i_j + cur_im_j) 
+									 + CY*CY * (cur_i_jp - 2 * cur_i_j + cur_i_jm);
 
+
+	u_0[coords.x * max_w + coords.y] = tmp + source[coords.x * max_w + coords.y];
+
+	pixel = floatToPix(u_0[coords.x * max_w + coords.y]);
+
+	imageStore(img_output, coords, pixel);
 
 	/*
 	if ( coords.x %9 == 0 && coords.y %9 == 0) {
@@ -49,7 +94,6 @@ void main(){
 		pixel = vec4(.0,.5,1.0,1.0);
 	}
 	
-	imageStore(img_output, coords, pixel);
 	//imageStore(img_output, coords, vec4(.0,.6,1.0, 1.0));
 
 	/*
