@@ -24,12 +24,12 @@
 #define HEIGHT (MY_ACTUAL_HEIGHT + 2)
 #define WIDTH (MY_ACTUAL_WIDTH + 2)
 
-#define CX 0.5//célérité
-#define CY 0.5
+#define CX 0.4//célérité
+#define CY 0.4
 #define EPS 0.00001
 #define PI 3.1415926535897932384626
 
-#define IMPULSE 1.1
+#define IMPULSE 2.2
 
 /*
 void update_tab(double **u_n, double **u_nm, bool **closed, SDL_Renderer *ren){
@@ -119,6 +119,8 @@ int main(int argc, char* argv[]){
 		}
 	}
 
+	source[0][WIDTH/2][HEIGHT/2] = IMPULSE;
+
 
 	GLuint tabBuffer[1];
 	glGenBuffers(1, tabBuffer);
@@ -192,7 +194,7 @@ int main(int argc, char* argv[]){
 	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 	glUseProgram(0);
 
-	int count(0);
+	int count(20);
 		
 	while(!glfwWindowShouldClose(win.getaddr())){
 		glfwPollEvents();
@@ -214,6 +216,8 @@ int main(int argc, char* argv[]){
 
 				//modify_source[WIDTH/4 * HEIGHT + HEIGHT/4] = IMPULSE; 
 				//modify_source[3*WIDTH/4 * HEIGHT + 3*HEIGHT/4] = IMPULSE; 
+				if(!count) modify_source[WIDTH/2 * HEIGHT + HEIGHT/2] = 0;
+				else count--;
 			}
 			glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
 

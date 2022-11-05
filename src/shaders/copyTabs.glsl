@@ -22,7 +22,7 @@ layout (std430, binding = 1) coherent buffer SourceBuffer{
 void main(){
 	ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
 
-	if(coords.x == 0 || coords.x == max_w-1 || coords.y == 0 || coords.y == max_h-1){
+	if(coords.x == 0 || coords.x >= max_w-1 || coords.y == 0 || coords.y >= max_h-1){
 		return;
 	}
 

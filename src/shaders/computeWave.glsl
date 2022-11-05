@@ -45,7 +45,7 @@ vec4 floatToPix(float tmp){
 void main(){
 	ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
 
-	if(coords.x == 0 || coords.x == max_w-1 || coords.y == 0 || coords.y == max_h-1){
+	if(coords.x == 0 || coords.x >= max_w-1 || coords.y == 0 || coords.y >= max_h-1){
 		imageStore(img_output, coords, vec4(1.0f));
 		return;
 	}
