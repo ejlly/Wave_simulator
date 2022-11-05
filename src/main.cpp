@@ -18,49 +18,19 @@
 #include "keys.hpp"
 #include "shader_progs.hpp"
 
-#define ACTUAL_HEIGHT 600
-#define ACTUAL_WIDTH 600
+#define MY_ACTUAL_HEIGHT 700
+#define MY_ACTUAL_WIDTH 700
 
-#define HEIGHT (ACTUAL_HEIGHT + 2)
-#define WIDTH (ACTUAL_WIDTH + 2)
+#define HEIGHT (MY_ACTUAL_HEIGHT + 2)
+#define WIDTH (MY_ACTUAL_WIDTH + 2)
 
-#define DT 1 //en ms
-#define CX 0.005//célérité
-#define CY 0.005
+#define CX 0.5//célérité
+#define CY 0.5
 #define EPS 0.00001
 #define PI 3.1415926535897932384626
 
-#define IMPULSE (1)
+#define IMPULSE 1.1
 
-using namespace std;
-
-const char * GetGLErrorStr(GLenum err)
-{
-    switch (err)
-    {
-    case GL_NO_ERROR:          return "No error";
-    case GL_INVALID_ENUM:      return "Invalid enum";
-    case GL_INVALID_VALUE:     return "Invalid value";
-    case GL_INVALID_OPERATION: return "Invalid operation";
-    case GL_STACK_OVERFLOW:    return "Stack overflow";
-    case GL_STACK_UNDERFLOW:   return "Stack underflow";
-    case GL_OUT_OF_MEMORY:     return "Out of memory";
-    default:                   return "Unknown error";
-    }
-}
-
-void CheckGLError()
-{
-	std::cout << "Checking error\n";
-    while (true)
-    {
-        const GLenum err = glGetError();
-        if (GL_NO_ERROR == err)
-            break;
-
-        std::cout << "GL Error: " << GetGLErrorStr(err) << std::endl;
-    }
-}
 /*
 void update_tab(double **u_n, double **u_nm, bool **closed, SDL_Renderer *ren){
 	double tmp(0);
@@ -130,43 +100,36 @@ int main(int argc, char* argv[]){
 	int const grp_size = 32;
 	int const groups_x = (WIDTH/grp_size) + 1, groups_y = (HEIGHT/grp_size) + 1;
 
-	ComputeProgram calculate("src/shaders/computeWave.glsl");
-	ComputeProgram copies("src/shaders/copyTabs.glsl");
+	std::string prefix("#version 430\n#define max_w ");
+	prefix += std::to_string(WIDTH);
+	prefix += "\n#define max_h ";
+	prefix += std::to_string(HEIGHT);
+	prefix += "\n";
+	
+	//std::cout << "PREFIX : " << prefix << std::endl;
 
-	GLfloat source[WIDTH][HEIGHT];
-	GLfloat u_0[WIDTH][HEIGHT];
-	GLfloat u_1[WIDTH][HEIGHT];
-	GLfloat u_2[WIDTH][HEIGHT];
+	ComputeProgram copies("src/shaders/copyTabs.glsl", prefix.c_str());
+	ComputeProgram calculate("src/shaders/computeWave.glsl", prefix.c_str());
+
+
+	GLfloat source[4][WIDTH][HEIGHT]; //0 is source, 1 is u_2, 2 is u_1, 3 is u_0
 	for(int i(0); i<WIDTH; i++){
 		for(int j(0); j<HEIGHT; j++){
-			source[i][j] = 0;
-			u_0[i][j] = 0;
-			u_1[i][j] = 0;
-			u_2[i][j] = 0;
+			for(int k(0); k<4; k++) source[k][i][j] = 0.f;
 		}
 	}
 
 
-	GLuint tabBuffer[4];
+	GLuint tabBuffer[1];
+	glGenBuffers(1, tabBuffer);
 
-	glGenBuffers(4, tabBuffer);
+
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, tabBuffer[0]);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, tabBuffer[0]);
-	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(GLfloat)*WIDTH*HEIGHT, source, GL_DYNAMIC_READ);
+	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(GLfloat)*4*WIDTH*HEIGHT, source, GL_DYNAMIC_COPY);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, tabBuffer[1]);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, tabBuffer[1]);
-	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(GLfloat)*WIDTH*HEIGHT, u_2, GL_DYNAMIC_READ);
-
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, tabBuffer[2]);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, tabBuffer[2]);
-	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(GLfloat)*WIDTH*HEIGHT, u_1, GL_DYNAMIC_READ);
-
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, tabBuffer[3]);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, tabBuffer[3]);
-	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(GLfloat)*WIDTH*HEIGHT, u_0, GL_DYNAMIC_READ);
-
-	GLuint waveTextures[1]; //0 is actual, 1 is mem intermediate, 2 is mem
+	GLuint waveTextures[1];
 	glGenTextures(1, waveTextures);
 
 	glActiveTexture(GL_TEXTURE0);
@@ -180,14 +143,10 @@ int main(int argc, char* argv[]){
     glGenerateMipmap(GL_TEXTURE_2D);  
 	glBindImageTexture(0, waveTextures[0], 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
 
+
 	calculate.use();
-	calculate.uniformui("max_w", (GLuint) WIDTH);
-	calculate.uniformui("max_h", (GLuint) HEIGHT);
-
-	copies.use();
-	copies.uniformui("max_w", (GLuint) WIDTH);
-	copies.uniformui("max_h", (GLuint) HEIGHT);
-
+	calculate.uniformf("CX", (GLfloat) CX);
+	calculate.uniformf("CY", (GLfloat) CY);
 	glUseProgram(0);
 	
 	GLfloat vertices[] = {
@@ -202,13 +161,6 @@ int main(int argc, char* argv[]){
 		0, 1, 3,
 		1, 2, 3
 	};
-
-	/*
-	glBindTexture(GL_TEXTURE_2D, waveTexture);
-	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-	glBindImageTexture (0, 0, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
-	glBindTexture(GL_TEXTURE_2D, 0);
-	*/
 
 	DrawingProgram plot("src/shaders/vertexShader.vs", "src/shaders/fragmentShader.fs");
 
@@ -228,11 +180,6 @@ int main(int argc, char* argv[]){
 	glVertexAttribPointer(0, 3,	GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat), (GLvoid*) 0);
 	glEnableVertexAttribArray(0);
 
-	/*
-	glVertexAttribPointer(1, 3,	GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat), (GLvoid*) (3*sizeof(GLfloat)));
-	glEnableVertexAttribArray(1);
-	*/
-
 	glVertexAttribPointer(2, 2,	GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat), (GLvoid*) (6*sizeof(GLfloat)));
 	glEnableVertexAttribArray(2);
 
@@ -240,27 +187,54 @@ int main(int argc, char* argv[]){
 
 	GLfloat timeOrigin = glfwGetTime();
 
+	copies.use();
+	copies.compute(WIDTH, HEIGHT, 1);
+	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+	glUseProgram(0);
+
+	int count(0);
+		
 	while(!glfwWindowShouldClose(win.getaddr())){
 		glfwPollEvents();
 		GLfloat timeValue = glfwGetTime();
-
-		copies.use();
-		copies.compute(groups_x, groups_y, 1);
-		glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-	
-		calculate.use();
-		//calculate.uniformf("time", timeValue - timeOrigin);
-		source[WIDTH/2][HEIGHT/2] = IMPULSE * sin(PI*(timeValue - timeOrigin));
-		//source[WIDTH/2 + 1][HEIGHT/2] = -IMPULSE * sin(PI*(timeValue - timeOrigin));
-		//source[WIDTH/2][HEIGHT/2] = IMPULSE;
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, tabBuffer[0]);
-		glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(source), source, GL_DYNAMIC_READ);
-
-		calculate.compute(groups_x, groups_y, 1);
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-
 		
+		//compute part
+		{
+			glActiveTexture(GL_TEXTURE0);
+			glBindTexture(GL_TEXTURE_2D, waveTextures[0]);
+
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, tabBuffer[0]);
+			calculate.use();
+			//calculate.uniformf("time", timeValue - timeOrigin);
+			GLfloat* modify_source = (GLfloat*) glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_WRITE_ONLY);
+			if(modify_source){
+				//modify_source[WIDTH/4 * HEIGHT + HEIGHT/4] = IMPULSE * sin(PI*(timeValue - timeOrigin)/1);
+				//modify_source[3*WIDTH/4 * HEIGHT + 3*HEIGHT/4] = IMPULSE * sin(PI*(timeValue - timeOrigin)/1);
+
+
+				//modify_source[WIDTH/4 * HEIGHT + HEIGHT/4] = IMPULSE; 
+				//modify_source[3*WIDTH/4 * HEIGHT + 3*HEIGHT/4] = IMPULSE; 
+			}
+			glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+
+
+
+			calculate.compute(groups_x, groups_y, 1);
+			glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+			glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+			copies.use();
+			copies.compute(groups_x, groups_y, 1);
+			glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
+			glBindTexture(GL_TEXTURE_2D, 0);
+		}
+
+
+			
+
 		glClear(GL_COLOR_BUFFER_BIT);
 		plot.use();
 
@@ -275,7 +249,6 @@ int main(int argc, char* argv[]){
 
 		glfwSwapBuffers(win.getaddr());
 
-		//usleep(500);
 	}
 
 
@@ -369,7 +342,7 @@ int main(int argc, char* argv[]){
 
 
 	glDeleteTextures(1, waveTextures);
-	glDeleteBuffers(4, tabBuffer);
+	glDeleteBuffers(1, tabBuffer);
 
 	glfwTerminate();
 	return 0;

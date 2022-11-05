@@ -13,15 +13,15 @@
 
 using namespace std;
 
-void update_tab(double **u_n, double **u_nm, bool **closed, SDL_Renderer *ren){
+void update_tab(double **u_n, double **u_nm, double **u_nmm, double **source, bool **closed, SDL_Renderer *ren){
 	double tmp(0);
 	for(int i(1); i<LENGTH+1; i++){
 		for(int j(1); j<WIDTH+1; j++){
 			if(!closed[i][j]){
 				//if(i == 50) printf("%d\n", j);
-				tmp = -u_nm[i][j] + 2*u_n[i][j] + CX*CX * (u_n[i+1][j] - 2 * u_n[i][j] + u_n[i-1][j]) 
-										   + CY*CY * (u_n[i][j+1] - 2 * u_n[i][j] + u_n[i][j-1]);
-				u_nm[i][j] = u_n[i][j];
+				tmp = -u_nmm[i][j] + 2*u_nm[i][j] + CX*CX * (u_nm[i+1][j] - 2 * u_nm[i][j] + u_nm[i-1][j]) 
+										   + CY*CY * (u_nm[i][j+1] - 2 * u_nm[i][j] + u_nm[i][j-1]) + source[i][j];
+
 				u_n[i][j] = tmp;
 			
 				if(tmp > EPS){
@@ -38,18 +38,33 @@ void update_tab(double **u_n, double **u_nm, bool **closed, SDL_Renderer *ren){
 			}
 		}
 	}
+	
+	for(int i(1); i<LENGTH+1; i++){
+		for(int j(1); j<WIDTH+1; j++){
+			u_nmm[i][j] = u_nm[i][j];
+			u_nm[i][j] = u_n[i][j];
+		}
+	}
+	
 }
 
-void update_tab2(double **u_n, double **u_nm, bool **closed){
+void update_tab2(double **u_n, double **u_nm, double **u_nmm, double **source, bool **closed){
 	double tmp(0);
 	for(int i(1); i<LENGTH+1; i++){
 		for(int j(1); j<WIDTH+1; j++){
 			if(!closed[i][j]){
-			tmp = -u_nm[i][j] + 2*u_n[i][j] + CX*CX * (u_n[i+1][j] - 2 * u_n[i][j] + u_n[i-1][j]) 
-										   + CY*CY * (u_n[i][j+1] - 2 * u_n[i][j] + u_n[i][j-1]);
-			u_nm[i][j] = u_n[i][j];
+			tmp = -u_nmm[i][j] + 2*u_nm[i][j] + CX*CX * (u_nm[i+1][j] - 2 * u_nm[i][j] + u_nm[i-1][j]) 
+										   + CY*CY * (u_nm[i][j+1] - 2 * u_nm[i][j] + u_nm[i][j-1]) + source[i][j];
 			u_n[i][j] = tmp;
+
+			}
 		}
+	}
+
+	for(int i(1); i<LENGTH+1; i++){
+		for(int j(1); j<WIDTH+1; j++){
+			u_nmm[i][j] = u_nm[i][j];
+			u_nm[i][j] = u_n[i][j];
 		}
 	}
 }
@@ -79,20 +94,26 @@ int main(int argc, char* argv[]){
 
 	int mouse_x(0), mouse_y(0); //coordonnées de la souris
 	
-	double **u_n, **u_nm;
+	double **u_n, **u_nm, **u_nmm, **source;
 	bool **closed;
 
 	u_n = new double *[LENGTH+2];
 	u_nm = new double *[LENGTH+2];
+	u_nmm = new double *[LENGTH+2];
+	source = new double *[LENGTH+2];
 	closed = new bool *[LENGTH+2];
 
 	for(int i(0); i<LENGTH+2; i++){
 		u_n[i] = new double[WIDTH+2];
 		u_nm[i] = new double[WIDTH+2];
+		u_nmm[i] = new double[WIDTH+2];
+		source[i] = new double[WIDTH+2];
 		closed[i]= new bool[WIDTH+2];
 		for(int j(0); j<WIDTH+2; j++){
 			u_n[i][j] = 0;
 			u_nm[i][j] = 0;
+			u_nmm[i][j] = 0;
+			source[i][j] = 0;
 			closed[i][j] = false;
 		}
 	}
@@ -144,11 +165,11 @@ int main(int argc, char* argv[]){
 
 		for(int l(0); l<128; l++){
 			
-			u_n[LENGTH/2][WIDTH/2] = IMPULSE * sin(PI*counter/100);
-			counter += DT/((float) 10);update_tab2(u_n, u_nm, closed);
+			source[LENGTH/2][WIDTH/2] = IMPULSE * sin(PI*counter/100);
+			counter += DT/((float) 10);update_tab2(u_n, u_nm, u_nmm, source, closed);
 			//SDL_RenderPresent(ren);
 		}
-		update_tab(u_n, u_nm, closed, ren);
+		update_tab(u_n, u_nm, u_nmm, source, closed, ren);
 		SDL_RenderPresent(ren);
 
 		SDL_Delay(DT*100);

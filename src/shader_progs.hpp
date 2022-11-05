@@ -8,11 +8,12 @@ class Program{
 	protected:
 		GLuint programID;
 		GLuint loadShader(char const *shader_file_path, GLenum shaderType);
+		GLuint loadShaderWithPrefix(char const *shader_file_path, char const *prefix, GLenum shaderType);
 
 	public:
 
-		void use();
 		~Program();
+		void use();
 		//floats
 		void uniformf(const char *name, GLfloat v0);
 		void uniformf(const char *name, GLfloat v0, GLfloat v1);
@@ -65,6 +66,7 @@ class DrawingProgram : public Program{
 class ComputeProgram : public Program{
 	public:
 		ComputeProgram(char const *cs);
+		ComputeProgram(char const *cs, char const *prefix);
 
 		void compute(int g_x, int g_y, int g_z);
 };

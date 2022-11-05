@@ -47,6 +47,51 @@ GLuint Program::loadShader(char const *shader_file_path, GLenum shaderType){
 	return shaderID;
 }
 
+GLuint Program::loadShaderWithPrefix(char const *shader_file_path, char const *prefix, GLenum shaderType){
+	GLuint shaderID = glCreateShader(shaderType);
+	
+	std::string shaderCodeString;
+	std::ifstream shaderFile(shader_file_path, std::ios::in);
+	if(shaderFile.is_open()){
+		std::stringstream shaderStream;
+		shaderStream << prefix;
+		shaderStream << shaderFile.rdbuf();
+		shaderCodeString = shaderStream.str();
+		shaderFile.close();
+	}
+	else{
+		std::string error;
+		error = std::string("Impossible to open file : ") + shader_file_path + "\n";
+		throw std::invalid_argument(error);
+	}
+	
+	char const *shaderCode = shaderCodeString.c_str();
+
+	//std::cout << "DEBUG :\n" << shaderCodeString << std::endl;
+
+	std::cout << "Compiling shader : " << shader_file_path << std::endl;
+
+	glShaderSource(shaderID, 1, &shaderCode, nullptr);
+	glCompileShader(shaderID);
+
+	GLint success = GL_FALSE;
+	glGetShaderiv(shaderID, GL_COMPILE_STATUS, &success);
+
+	if(success == GL_FALSE){
+		GLint logSize = 0;
+		glGetShaderiv(shaderID, GL_INFO_LOG_LENGTH, &logSize);
+		std::vector<GLchar> errorLog(logSize);
+		glGetShaderInfoLog(shaderID, logSize, &logSize, &errorLog[0]);
+
+		std::cout << &errorLog[0] << std::endl;
+		glDeleteShader(shaderID);
+		throw std::runtime_error("Compile shader error");
+	}
+
+	return shaderID;
+	
+}
+
 Program::~Program(){
 	glDeleteProgram(programID);
 }
@@ -322,7 +367,35 @@ ComputeProgram::ComputeProgram(char const *cs){
 	glDeleteShader(csID);
 }
 
+ComputeProgram::ComputeProgram(char const *cs, char const *prefix){
+	GLuint csID = loadShaderWithPrefix(cs, prefix, GL_COMPUTE_SHADER);
+
+	std::cout << "Linking compute program\n";
+
+	programID = glCreateProgram();
+	glAttachShader(programID, csID);
+	glLinkProgram(programID);
+
+
+	GLint success = GL_FALSE;
+	glGetProgramiv(programID, GL_LINK_STATUS, &success);
+
+	if(success == GL_FALSE){
+		GLint logSize = 0;
+		glGetProgramiv(programID, GL_INFO_LOG_LENGTH, &logSize);
+		std::vector<GLchar> errorLog(logSize);
+		glGetProgramInfoLog(programID, logSize, &logSize, &errorLog[0]);
+
+		std::cout << &errorLog[0] << std::endl;
+		glDeleteProgram(programID);
+		throw std::runtime_error("Compile shader error");
+	}
+
+	glDetachShader(programID, csID);
+	glDeleteShader(csID);
+}
+
+
 void ComputeProgram::compute(int g_x, int g_y, int g_z){
 	glDispatchCompute(g_x, g_y, g_z);
-	//glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 }
